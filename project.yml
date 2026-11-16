@@ -1,0 +1,32 @@
+name: TapisMarche
+options:
+  deploymentTarget:
+    macOS: "15.0"
+packages:
+  WalkingPadKit:
+    path: WalkingPadKit
+targets:
+  TapisMarche:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: WalkingPadKit
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Tapis Marche
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        NSBluetoothAlwaysUsageDescription: Tapis Marche se connecte à ton WalkingPad pour enregistrer tes marches.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ch.davidpreti.TapisMarche
+        PRODUCT_NAME: TapisMarche
+        DEVELOPMENT_TEAM: HFVC9G5X5R
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: Apple Development
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"

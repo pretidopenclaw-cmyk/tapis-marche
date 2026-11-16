@@ -27,9 +27,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ch.davidpreti.TapisMarche
         PRODUCT_NAME: TapisMarche
-        DEVELOPMENT_TEAM: HFVC9G5X5R
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: Apple Development
+        CODE_SIGN_IDENTITY: "-"   # ad-hoc by default; set your own in Local.mk (see README)
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"

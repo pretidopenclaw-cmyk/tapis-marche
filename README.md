@@ -1,64 +1,80 @@
-# tapis-marche
+# Tapis Marche
 
-Exploiter mon tapis de marche sans passer par l'application du fabricant :
-récupérer et conserver l'historique des séances, et trouver d'autres façons de s'en servir.
+A macOS menu bar app for the **KingSmith WalkingPad Z1** under-desk treadmill — no KS Fit app needed.
 
-## Tapis Marche (app macOS)
+- **Auto-start speed** — whenever the belt starts (remote, Mac or Raycast), it switches to your preferred speed (2.0 km/h by default).
+- **Stops when you step off** — no step counted for 10 s while the belt is moving → the belt stops.
+- **Control from the Mac** — menu bar, `tapismarche://` links, and ready-made **Raycast** commands (bind them to hotkeys).
+- **Walking journal** — every walk is recorded locally (SQLite) and pushed to a **Notion** database, with a weekly recap page.
+- **Live menu bar** — `🚶 2,0 km/h · 4 210 pas`, today's and this week's totals.
 
-App de barre de menus qui se connecte seule au WalkingPad Z1 (`KS-HD-Z1E`) en Bluetooth,
-enregistre chaque marche en local et l'envoie dans Notion, avec un récap chaque semaine.
-Elle pilote aussi la bande (vitesse au démarrage, arrêt quand tu descends, menu, liens, Raycast) via les seules
-commandes FTMS standard ; elle ne démarre jamais la bande d'elle-même.
+The UI is in French (it was built for a French-speaking user); the code and docs are in English.
 
-- Conception : `docs/superpowers/specs/2026-11-16-journal-marches-design.md`, `docs/superpowers/specs/2026-11-16-pilotage-tapis-design.md`
-- Plan : `docs/superpowers/plans/2026-11-16-journal-marches.md`
+> Built in an afternoon with Claude Code. Tested on a WalkingPad Z1 advertising as `KS-HD-Z1E`.
+> Other `KS-HD-*` models speak the same FTMS protocol but are untested. **Use at your own risk** — this app moves a
+> treadmill belt. Not affiliated with KingSmith.
 
-### Commandes
+## How it talks to the pad
 
-| Commande | Effet |
+Standard Bluetooth **FTMS**, nothing proprietary: Treadmill Data (`0x2ACD`) for speed, distance, time and the
+KingSmith step counter; Control Point (`0x2AD9`) for start, stop and target speed.
+On the tested unit **no vendor unlock handshake was needed**. Protocol notes and captures:
+[`docs/walkingpad-z1-protocol.md`](docs/walkingpad-z1-protocol.md).
+
+Safety rules enforced in code: the app never starts the belt on its own, speeds are clamped to the pad's
+announced range (and to 0.5–6.0 km/h), commands are spaced ≥ 400 ms apart, and no `0xE8` frame can ever be built.
+
+## Build
+
+Requirements: macOS 15+, Xcode 26+, [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+
+```bash
+make test      # 107 unit tests (WalkingPadKit, swift test)
+make build     # generates the Xcode project and builds build/Build/Products/Release/TapisMarche.app
+make install   # copies it to /Applications
+make run
+```
+
+Builds are ad-hoc signed by default. To keep Bluetooth permission and Keychain access across rebuilds, sign with
+your own certificate in a git-ignored `Local.mk`:
+
+```make
+DEVELOPMENT_TEAM := ABCDE12345
+CODE_SIGN_IDENTITY := Apple Development
+```
+
+Close KS Fit on your phone: the pad accepts a single Bluetooth connection.
+
+## Notion (optional)
+
+1. Create an internal integration at <https://www.notion.so/profile/integrations> and copy its secret.
+2. On the Notion page that will hold the journal: `…` › Connections › add the integration; copy the page link.
+3. Menu › Réglages… › paste the secret and the link › « Connecter Notion ».
+   The app creates a « Marches » database and a « Récaps hebdo » page. The secret is stored in the macOS Keychain only.
+
+## Raycast and links
+
+```bash
+open -g "tapismarche://demarrer"      # start
+open -g "tapismarche://arreter"       # stop
+open -g "tapismarche://vitesse/2.5"   # set speed (2,5 works too)
+open -g "tapismarche://plus-vite"     # +0.5 km/h
+open -g "tapismarche://moins-vite"    # −0.5 km/h
+```
+
+Raycast › Settings › Extensions › Script Commands › Add Directories › this repo's [`raycast/`](raycast) folder.
+Then assign hotkeys from Raycast (⌘K › Configure Command).
+
+## Project layout
+
+| Path | What |
 |---|---|
-| `make test` | tests du package `WalkingPadKit` (`swift test`) |
-| `make build` | génère le projet XcodeGen et compile l'app (Release) dans `build/` |
-| `make install` | copie l'app dans `/Applications` |
-| `make run` | lance l'app compilée |
+| `WalkingPadKit/` | pure, tested logic: FTMS decoding and commands, session tracking, SQLite journal, AutoPilot, Notion sync |
+| `App/` | the menu bar app: CoreBluetooth, SwiftUI menu and settings, Keychain, links |
+| `raycast/` | Raycast Script Commands |
+| `spike/` | throwaway Python probes used to reverse-engineer the pad (bleak) |
+| `docs/superpowers/` | design docs and implementation plans (in French) |
 
-Prérequis : Xcode 26+, XcodeGen, certificat « Apple Development » de l'équipe `HFVC9G5X5R`.
+## License
 
-### Brancher Notion
-
-1. Sur <https://www.notion.so/profile/integrations>, crée une intégration interne et copie son jeton.
-2. Dans Notion, ouvre la page qui accueillera le journal, menu `…` › Connexions › ajoute l'intégration.
-3. Dans l'app : menu › Réglages… › colle le jeton et l'URL de la page › « Connecter Notion ».
-   L'app crée la base « Marches » et la page « Récaps hebdo » sous cette page.
-
-Le jeton reste dans le Trousseau macOS ; il n'est écrit dans aucun fichier.
-
-### Piloter le tapis
-
-- **Automatique** : à chaque démarrage (télécommande, Mac ou Raycast), la bande passe à la vitesse préférée
-  (2,0 km/h par défaut) ; elle s'arrête seule après 10 s sans pas (15 s de délai après un démarrage).
-  Réglages › Tapis : vitesse au démarrage, « Arrêter quand je descends ».
-- **Menu** : « Démarrer le tapis », « Arrêter le tapis », « Plus vite », « Moins vite » (± 0,5 km/h).
-- **Liens** : `open -g "tapismarche://demarrer"`, `…/arreter`, `…/vitesse/2,5`, `…/plus-vite`, `…/moins-vite`.
-  Si le tapis n'est pas encore connecté, la commande attend 10 s puis une notification « Tapis introuvable » s'affiche.
-
-#### Raycast
-
-1. Raycast › Settings › Extensions › **Script Commands** › **Add Directories** › choisis `~/repo/tapis-marche/raycast`.
-2. Les commandes « Démarrer le tapis », « Arrêter le tapis », « Vitesse du tapis » (demande les km/h),
-   « Tapis plus vite », « Tapis moins vite » apparaissent dans Raycast.
-3. Pour un raccourci clavier : sélectionne la commande dans Raycast › ⌘K › **Configure Command** › Hotkey
-   (suggestion : ⌥⌘↑ démarrer, ⌥⌘↓ arrêter).
-
-### À savoir
-
-- Le tapis n'accepte qu'une connexion à la fois. Pour utiliser KS Fit, menu ›
-  « Libérer le tapis pour KS Fit (15 min) ».
-- Une séance se ferme après 3 minutes à l'arrêt ; une séance de moins de 2 min et 100 m est ignorée.
-- Le journal local : `~/Library/Application Support/TapisMarche/journal.sqlite`.
-- Logs : `/usr/bin/log show --last 10m --info --predicate 'subsystem == "ch.davidpreti.TapisMarche"'`.
-
-## Repères
-
-- `spike/walkingpad_probe.py` : sonde Bluetooth jetable du 2026-11-16 (lecture seule).
-- Les données de séances ne sont pas versionnées (`data/` est ignoré).
+[MIT](LICENSE)

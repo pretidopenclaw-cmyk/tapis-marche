@@ -52,11 +52,11 @@ public enum MenuText {
 
     public static func notion(_ status: SyncStatus?, configured: Bool) -> String {
         guard configured else { return "Notion : non configuré" }
-        switch status?.pending ?? 0 {
-        case 0: return "Notion : à jour"
-        case 1: return "Notion : 1 séance en attente"
-        case let n: return "Notion : \(n) séances en attente"
-        }
+        let pending = status?.pending ?? 0
+        let backlog = pending == 0 ? nil : "\(pending) séance\(pending > 1 ? "s" : "") en attente"
+        let problem = status?.lastError.map { $0 == .unauthorized ? "jeton refusé" : "erreur de synchro" }
+        let parts = [problem, backlog].compactMap { $0 }
+        return "Notion : " + (parts.isEmpty ? "à jour" : parts.joined(separator: " · "))
     }
 
     public static func session(_ s: WalkSession, calendar: Calendar) -> String {

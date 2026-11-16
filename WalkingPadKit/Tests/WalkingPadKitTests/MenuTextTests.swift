@@ -58,7 +58,7 @@ private let now = date(18, 16)  // Wednesday, week 47
     #expect(MenuText.notion(nil, configured: false) == "Notion : non configuré")
     #expect(MenuText.notion(SyncStatus(pending: 0, lastError: nil), configured: true) == "Notion : à jour")
     #expect(MenuText.notion(SyncStatus(pending: 1, lastError: nil), configured: true) == "Notion : 1 séance en attente")
-    #expect(MenuText.notion(SyncStatus(pending: 3, lastError: .unauthorized), configured: true)
+    #expect(MenuText.notion(SyncStatus(pending: 3, lastError: nil), configured: true)
             == "Notion : 3 séances en attente")
     #expect(MenuText.notion(nil, configured: true) == "Notion : à jour")
 }
@@ -66,4 +66,13 @@ private let now = date(18, 16)  // Wednesday, week 47
 @Test func sessionLineForRecentSessionsMenu() {
     let s = walk(date(16, 14, 5), seconds: 1500, meters: 1250, steps: 1830)
     #expect(MenuText.session(s, calendar: calendar) == "lun. 16 nov. · 14:05 — 25 min · 1,3 km")
+}
+
+@Test func notionLineShowsWhySyncFails() {
+    #expect(MenuText.notion(SyncStatus(pending: 2, lastError: .unauthorized), configured: true)
+            == "Notion : jeton refusé · 2 séances en attente")
+    #expect(MenuText.notion(SyncStatus(pending: 0, lastError: .unauthorized), configured: true)
+            == "Notion : jeton refusé")
+    #expect(MenuText.notion(SyncStatus(pending: 1, lastError: .other("offline")), configured: true)
+            == "Notion : erreur de synchro · 1 séance en attente")
 }

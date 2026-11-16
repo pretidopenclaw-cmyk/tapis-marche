@@ -104,3 +104,11 @@ private func appendWalk(_ store: SessionStore, seconds: Int) throws {
     try SessionStore(path: path).save(original)
     #expect(try SessionStore(path: path).sessions(in: DateInterval(start: t0, duration: 3600)) == [original])
 }
+
+@Test func earliestSessionStartIsTheOldestStart() throws {
+    let store = try SessionStore(path: nil)
+    #expect(try store.earliestSessionStart() == nil)
+    try store.save(session(startingAt: 3600))
+    try store.save(session(startingAt: 600))
+    #expect(try store.earliestSessionStart() == t0.addingTimeInterval(600))
+}

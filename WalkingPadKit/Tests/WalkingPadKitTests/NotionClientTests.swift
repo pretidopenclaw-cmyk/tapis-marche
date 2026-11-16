@@ -126,3 +126,17 @@ private func plainText(_ richText: Any?) -> String? {
     await #expect(throws: NotionError.rateLimited) { try await client.trashPage("p") }
     await #expect(throws: NotionError.http(status: 500, body: "boom")) { try await client.trashPage("p") }
 }
+
+@Test func findSessionPageQueriesDataSourceByID() async throws {
+    let transport = FakeTransport()
+    transport.enqueue(200, #"{"object": "list", "results": [{"id": "existing-1"}]}"#)
+    transport.enqueue(200, #"{"object": "list", "results": []}"#)
+    let client = NotionClient(token: "secret", transport: transport)
+    #expect(try await client.findSessionPage(session().id, in: config) == "existing-1")
+    #expect(try await client.findSessionPage(session().id, in: config) == nil)
+    let query = transport.sent[0]
+    #expect(query.method == "POST" && query.path == "/v1/data_sources/ds-1/query")
+    let filter = query.json["filter"] as? [String: Any]
+    #expect(filter?["property"] as? String == "ID")
+    #expect((filter?["rich_text"] as? [String: String])?["equals"] == "11111111-2222-3333-4444-555555555555")
+}

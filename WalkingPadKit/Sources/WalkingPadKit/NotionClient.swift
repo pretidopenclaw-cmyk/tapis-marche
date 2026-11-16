@@ -19,6 +19,8 @@ public enum NotionError: Error, Equatable, Sendable {
     case rateLimited
     case http(status: Int, body: String)
     case malformedResponse
+    /// Anything outside the Notion API itself (network down, local store failure).
+    case other(String)
 }
 
 /// Where the app writes in the user's workspace, created once by `setUpWorkspace`.
@@ -71,6 +73,13 @@ public struct NotionClient: Sendable {
 
     public func createRecapPage(_ summary: WeeklySummary, in config: NotionConfig) async throws -> String {
         try await createPage(NotionPayloads.recapPageBody(summary, recapsPageId: config.recapsPageId))
+    }
+
+    /// The session's row if it already exists (e.g. created before a lost response), matched on the « ID » column.
+    public func findSessionPage(_ id: UUID, in config: NotionConfig) async throws -> String? {
+        let body: [String: Any] = ["filter": ["property": "ID", "rich_text": ["equals": id.uuidString]], "page_size": 1]
+        let result = try await send("POST", "/v1/data_sources/\(config.dataSourceId)/query", body)
+        return ((result["results"] as? [[String: Any]])?.first)?["id"] as? String
     }
 
     public func trashPage(_ pageId: String) async throws {

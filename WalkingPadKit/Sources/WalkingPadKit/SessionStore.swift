@@ -90,6 +90,11 @@ public final class SessionStore: Sendable {
         return end.map(Date.init(timeIntervalSince1970:))
     }
 
+    public func earliestSessionStart() throws -> Date? {
+        let start = try db.read { db in try Double.fetchOne(db, sql: "SELECT MIN(start) FROM session") }
+        return start.map(Date.init(timeIntervalSince1970:))
+    }
+
     public func pruneSamples(before date: Date) throws {
         try db.write { db in
             try db.execute(sql: "DELETE FROM sample WHERE timestamp < ?", arguments: [date.timeIntervalSince1970])

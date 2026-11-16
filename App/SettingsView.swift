@@ -16,6 +16,12 @@ struct SettingsView: View {
             Section("Notion") {
                 if model.notionConfigured {
                     Text("Notion connecté : base « Marches » et page « Récaps hebdo ».")
+                    SecureField("Nouveau jeton d'intégration", text: $token)
+                    Button("Remplacer le jeton") {
+                        message = model.replaceToken(token)
+                        token = ""
+                    }
+                    .disabled(token.isEmpty)
                     Button("Déconnecter Notion") { model.disconnectNotion() }
                 } else {
                     SecureField("Jeton d'intégration Notion", text: $token)

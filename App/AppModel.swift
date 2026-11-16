@@ -71,6 +71,18 @@ final class AppModel {
         }
     }
 
+    /// Swaps a revoked token without recreating the « Marches » database.
+    func replaceToken(_ token: String) -> String {
+        do {
+            try Keychain.write(token)
+        } catch {
+            return "Impossible d'enregistrer le jeton : \(error)"
+        }
+        configureSync()
+        syncNow()
+        return "Jeton remplacé."
+    }
+
     func disconnectNotion() {
         Keychain.delete()
         UserDefaults.standard.removeObject(forKey: Self.notionConfigKey)

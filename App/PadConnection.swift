@@ -57,6 +57,12 @@ final class PadConnection: NSObject {
 extension PadConnection: @preconcurrency CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         log.notice("bluetooth state \(central.state.rawValue, privacy: .public)")
+        if central.state != .poweredOn {
+            // Bluetooth off/reset invalidates peripherals without a disconnect callback: forget the pad
+            // so the next power-on scans again instead of believing it is still connected.
+            pad = nil
+            if releasedUntil == nil { onPresence(.absent) }
+        }
         scan()
     }
 

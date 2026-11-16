@@ -14,11 +14,15 @@ final class PadConnection: NSObject {
     private static let treadmillData = CBUUID(string: "2ACD")
     private static let namePrefix = "KS-HD-"
     private static let reconnectDelay: Duration = .seconds(5)
+    /// A connection that has not delivered Treadmill Data by then is abandoned and retried.
+    private static let connectTimeout: Duration = .seconds(20)
 
     private let log = Logger(subsystem: "ch.davidpreti.TapisMarche", category: "pad")
     private var central: CBCentralManager?
     private var pad: CBPeripheral?
     private var releasedUntil: Date?
+    private var releaseTask: Task<Void, Never>?
+    private var connectWatchdog: Task<Void, Never>?
 
     func start() {
         central = CBCentralManager(delegate: self, queue: nil)
@@ -32,8 +36,10 @@ final class PadConnection: NSObject {
         if let pad { central?.cancelPeripheralConnection(pad) }
         log.notice("released until \(until, privacy: .public)")
         onPresence(.released(until: until))
-        Task {
+        releaseTask?.cancel()   // a second tap restarts the 15 minutes instead of being cut short by the first
+        releaseTask = Task {
             try? await Task.sleep(for: .seconds(duration))
+            guard !Task.isCancelled else { return }
             releasedUntil = nil
             scan()
         }
@@ -44,6 +50,18 @@ final class PadConnection: NSObject {
         onPresence(.absent)
         central.scanForPeripherals(withServices: [Self.fitnessMachine])
         log.notice("scanning")
+    }
+
+    private func watchConnection(_ peripheral: CBPeripheral) {
+        connectWatchdog?.cancel()
+        connectWatchdog = Task {
+            try? await Task.sleep(for: Self.connectTimeout)
+            guard !Task.isCancelled, pad === peripheral else { return }
+            log.error("connection timed out, retrying")
+            central?.cancelPeripheralConnection(peripheral)
+            pad = nil
+            scanLater()
+        }
     }
 
     private func scanLater() {
@@ -74,6 +92,7 @@ extension PadConnection: @preconcurrency CBCentralManagerDelegate {
         pad = peripheral
         peripheral.delegate = self
         central.connect(peripheral)
+        watchConnection(peripheral)
         onPresence(.connecting)
         log.notice("connecting \(name, privacy: .public)")
     }
@@ -106,6 +125,7 @@ extension PadConnection: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         for characteristic in service.characteristics ?? [] where characteristic.uuid == Self.treadmillData {
             peripheral.setNotifyValue(true, for: characteristic)
+            connectWatchdog?.cancel()
             onPresence(.connected(speedKmh: 0))
             log.notice("connected \(peripheral.name ?? "?", privacy: .public)")
         }

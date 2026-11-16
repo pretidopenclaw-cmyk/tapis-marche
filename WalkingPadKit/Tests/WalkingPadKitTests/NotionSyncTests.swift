@@ -125,3 +125,28 @@ private func pageCreations(_ transport: FakeTransport) -> [FakeTransport.Sent] {
     #expect(status.lastError == nil)
     #expect(pageCreations(transport).count == 2)
 }
+
+@Test func overlappingSyncsCreateEachSessionOnce() async throws {
+    let store = try SessionStore(path: nil)
+    try store.save(walk(date(16)))
+    let transport = FakeTransport(latency: .milliseconds(30))
+    let sync = NotionSync(store: store, client: NotionClient(token: "t", transport: transport),
+                          config: config, calendar: calendar)
+    async let first = sync.syncSessions()
+    async let second = sync.syncSessions()
+    _ = await (first, second)
+    #expect(pageCreations(transport).count == 1)
+}
+
+@Test func recapRecoversAfterCreateFailedOnceOldPageTrashed() async throws {
+    let (sync, store, transport) = try makeSync([walk(date(16))])
+    _ = await sync.syncRecaps(now: afterWeek47)
+    try store.save(walk(date(20)))
+    transport.enqueue(200, "{}")                                   // trash old recap: ok
+    transport.enqueue(500, "boom")                                 // create new recap: fails
+    #expect(await sync.syncRecaps(now: afterWeek47).lastError == .http(status: 500, body: "boom"))
+    transport.enqueue(400, #"{"code": "validation_error", "message": "archived"}"#)  // old page already in trash
+    let retried = await sync.syncRecaps(now: afterWeek47)
+    #expect(retried.lastError == nil)
+    #expect(pageCreations(transport).count == 3)   // first recap, failed attempt, replacement
+}

@@ -12,6 +12,12 @@ final class FakeTransport: HTTPTransport {
     }
 
     private let state = Mutex<(responses: [(Int, String)], sent: [Sent])>(([], []))
+    /// Simulated network latency, to let concurrent callers interleave.
+    let latency: Duration
+
+    init(latency: Duration = .zero) {
+        self.latency = latency
+    }
 
     func enqueue(_ status: Int, _ body: String) {
         state.withLock { $0.responses.append((status, body)) }
@@ -20,6 +26,7 @@ final class FakeTransport: HTTPTransport {
     var sent: [Sent] { state.withLock { $0.sent } }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if latency > .zero { try await Task.sleep(for: latency) }
         let json = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
         let (status, body) = state.withLock { state -> (Int, String) in
             state.sent.append(Sent(method: request.httpMethod ?? "GET", path: request.url!.path,

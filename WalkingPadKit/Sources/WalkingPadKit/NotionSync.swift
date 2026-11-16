@@ -17,6 +17,9 @@ public actor NotionSync {
     private let client: NotionClient
     private let config: NotionConfig
     private let calendar: Calendar
+    /// One run at a time: the actor is reentrant at each `await`, so two runs could both miss a row and both create it.
+    private var running = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
 
     public init(store: SessionStore, client: NotionClient, config: NotionConfig, calendar: Calendar) {
         self.store = store
@@ -27,7 +30,7 @@ public actor NotionSync {
 
     /// Syncs pending sessions oldest first; stops at the first error and keeps the rest pending.
     public func syncSessions() async -> SyncStatus {
-        let error = await attempt {
+        let error = await exclusively {
             for session in try store.unsyncedSessions() {
                 var pageId = try await client.findSessionPage(session.id, in: config)
                 if pageId == nil {
@@ -41,7 +44,7 @@ public actor NotionSync {
 
     /// Publishes (or refreshes) the recap of every finished week that has at least one session.
     public func syncRecaps(now: Date) async -> SyncStatus {
-        let error = await attempt {
+        let error = await exclusively {
             for weekStart in try finishedWeeks(before: now) {
                 try await syncRecap(weekStart: weekStart)
             }
@@ -78,13 +81,25 @@ public actor NotionSync {
         calendar.dateInterval(of: .weekOfYear, for: start)!
     }
 
-    /// A recap David already deleted in Notion must not block its replacement.
+    /// A recap already gone (deleted by David: 404, or trashed by an earlier half-done run: 400) must not block its replacement.
     private func trashIgnoringMissing(_ pageId: String) async throws {
         do {
             try await client.trashPage(pageId)
-        } catch NotionError.http(status: 404, _) {
+        } catch NotionError.http(let status, _) where status == 400 || status == 404 {
             return
         }
+    }
+
+    private func exclusively(_ work: () async throws -> Void) async -> NotionError? {
+        if running {
+            await withCheckedContinuation { waiting.append($0) }
+        } else {
+            running = true
+        }
+        defer {
+            if waiting.isEmpty { running = false } else { waiting.removeFirst().resume() }
+        }
+        return await attempt(work)
     }
 
     private func attempt(_ work: () async throws -> Void) async -> NotionError? {

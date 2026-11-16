@@ -57,60 +57,31 @@ public enum NotionPayloads {
     /// The recap's text lines, e.g. "5 séances · 7 h 40 de marche · 31,2 km · 41 380 pas".
     static func recapLines(_ s: WeeklySummary) -> [String] {
         var headline = ["\(s.sessionCount) séance\(s.sessionCount > 1 ? "s" : "")",
-                        "\(duration(s.activeSeconds)) de marche", km(s.distanceM)]
-        if let steps = s.steps { headline.append("\(thousands(steps)) pas") }
+                        "\(FrenchFormat.duration(s.activeSeconds)) de marche", FrenchFormat.km(s.distanceM)]
+        if let steps = s.steps { headline.append("\(FrenchFormat.thousands(steps)) pas") }
         var lines = [headline.joined(separator: " · ")]
         if let best = s.bestDay {
-            lines.append("Meilleur jour : \(weekdays[best.weekdayIndex]) (\(duration(best.activeSeconds)), \(km(best.distanceM)))")
+            lines.append("Meilleur jour : \(FrenchFormat.weekdays[best.weekdayIndex]) (\(FrenchFormat.duration(best.activeSeconds)), \(FrenchFormat.km(best.distanceM)))")
         }
         if let previous = s.previousWeekDistanceM {
             let delta = s.distanceM - previous
-            lines.append("vs semaine précédente : \(delta >= 0 ? "+" : "-")\(km(abs(delta)))")
+            lines.append("vs semaine précédente : \(delta >= 0 ? "+" : "-")\(FrenchFormat.km(abs(delta)))")
         }
         return lines
     }
 
-    // MARK: - French formatting
-
-    private static let weekdays = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-
-    static func duration(_ seconds: Int) -> String {
-        let hours = seconds / 3600, minutes = seconds % 3600 / 60
-        return hours == 0 ? "\(minutes) min" : "\(hours) h \(String(format: "%02d", minutes))"
-    }
-
-    static func km(_ meters: Int) -> String {
-        String(format: "%.1f km", Double(meters) / 1000).replacingOccurrences(of: ".", with: ",")
-    }
-
-    static func thousands(_ n: Int) -> String {
-        let digits = Array(String(n))
-        return digits.enumerated().map { index, digit in
-            (index > 0 && (digits.count - index) % 3 == 0 ? " " : "") + String(digit)
-        }.joined()
-    }
-
     private static func sessionTitle(_ date: Date, calendar: Calendar) -> String {
-        formatter("EEE d MMM · HH:mm", calendar).string(from: date)
+        FrenchFormat.sessionStart(date, calendar: calendar)
     }
 
     private static func day(_ date: Date, calendar: Calendar) -> String {
-        formatter("yyyy-MM-dd", calendar).string(from: date)
+        FrenchFormat.formatter("yyyy-MM-dd", calendar).string(from: date)
     }
 
     private static func timestamp(_ date: Date, calendar: Calendar) -> String {
         let iso = ISO8601DateFormatter()
         iso.timeZone = calendar.timeZone
         return iso.string(from: date)
-    }
-
-    private static func formatter(_ format: String, _ calendar: Calendar) -> DateFormatter {
-        let f = DateFormatter()
-        f.calendar = calendar
-        f.locale = calendar.locale
-        f.timeZone = calendar.timeZone
-        f.dateFormat = format
-        return f
     }
 
     private static func round(_ value: Double, decimals: Int) -> Double {

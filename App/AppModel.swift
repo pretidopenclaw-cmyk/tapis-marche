@@ -3,7 +3,7 @@ import Observation
 import os
 import WalkingPadKit
 
-/// Wires the pad, the session tracker and the local store; exposes what the menu shows.
+/// Wires the pad, the walk journal and Notion; exposes what the menu shows.
 @MainActor
 @Observable
 final class AppModel {
@@ -24,7 +24,7 @@ final class AppModel {
     private static let notionConfigKey = "notionConfig"
 
     @ObservationIgnored private let store: SessionStore
-    @ObservationIgnored private var tracker: SessionTracker
+    @ObservationIgnored private var journal: WalkJournal
     @ObservationIgnored private let connection = PadConnection()
     @ObservationIgnored private let log = Logger(subsystem: "ch.davidpreti.TapisMarche", category: "journal")
     @ObservationIgnored private var sync: NotionSync?
@@ -35,7 +35,7 @@ final class AppModel {
     init() {
         do {
             store = try SessionStore(path: Self.databasePath())
-            tracker = try SessionRecovery.recover(store: store, now: .now)
+            journal = try WalkJournal(store: store, now: .now)
         } catch {
             // Never fall back to an in-memory journal: losing walks silently is the one thing this app must not do.
             fatalError("Cannot open the walking journal: \(error)")
@@ -136,20 +136,18 @@ final class AppModel {
     }
 
     private func ingest(_ sample: TreadmillSample) {
-        record { try store.append(sample) }
-        if let closed = tracker.ingest(sample) { save(closed) }
+        record { if let closed = try journal.ingest(sample) { didClose(closed) } }
         refresh()
     }
 
     private func tick() {
-        if let closed = tracker.tick(now: .now) { save(closed) }
+        record { if let closed = try journal.tick(now: .now) { didClose(closed) } }
         record { try store.pruneSamples(before: Date.now.addingTimeInterval(-Self.sampleRetention)) }
         if failures == 0, Date.now.timeIntervalSince(lastSyncAt) >= Self.recapInterval { syncNow() }
         refresh()
     }
 
-    private func save(_ session: WalkSession) {
-        record { try store.save(session) }
+    private func didClose(_ session: WalkSession) {
         log.notice("session closed \(session.totals.distanceM, privacy: .public) m in \(session.totals.activeSeconds, privacy: .public) s")
         syncNow()
     }
@@ -158,7 +156,7 @@ final class AppModel {
         let now = Date.now
         let recent = (try? store.sessions(in: DateInterval(start: now.addingTimeInterval(-14 * 24 * 3600), end: now))) ?? []
         recentSessions = Array(recent.suffix(5).reversed())
-        dashboard = Dashboard.make(closed: recent, open: tracker.openSession, now: now, calendar: calendar)
+        dashboard = Dashboard.make(closed: recent, open: journal.openSession, now: now, calendar: calendar)
     }
 
     private func startTicking() {

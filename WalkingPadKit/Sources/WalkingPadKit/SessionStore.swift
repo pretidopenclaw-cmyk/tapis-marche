@@ -22,7 +22,12 @@ public final class SessionStore: Sendable {
 
     /// `path == nil` opens an in-memory database (tests).
     public init(path: String?) throws {
-        db = try path.map { try DatabaseQueue(path: $0) } ?? DatabaseQueue()
+        // WAL on disk: frequent small writes without a full fsync of the main file each time.
+        db = try path.map { path -> DatabaseQueue in
+            let queue = try DatabaseQueue(path: path)
+            try queue.writeWithoutTransaction { try $0.execute(sql: "PRAGMA journal_mode = WAL") }
+            return queue
+        } ?? DatabaseQueue()
         try Self.migrator.migrate(db)
     }
 
@@ -38,6 +43,10 @@ public final class SessionStore: Sendable {
                 """)
         }
         return migrator
+    }
+
+    func journalMode() throws -> String {
+        try db.read { try String.fetchOne($0, sql: "PRAGMA journal_mode") ?? "" }
     }
 
     public func append(_ sample: TreadmillSample) throws {

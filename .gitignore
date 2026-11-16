@@ -6,3 +6,8 @@ node_modules/
 __pycache__/
 .venv/
 .DS_Store
+.jarvis-logs/
+.build/
+*.xcodeproj/
+build/
+Local.mk

@@ -29,6 +29,8 @@ public struct SpeedRange: Equatable, Sendable {
     }
 
     func hundredths(_ kmh: Double) -> Int {
+        // Bound the Double first: Int(Double) traps on NaN, infinities and huge values.
+        let kmh = kmh.isNaN ? minKmh : min(max(kmh, minKmh), maxKmh)
         let step = max(1, Int((stepKmh * 100).rounded()))
         let snapped = Int((kmh * 100 / Double(step)).rounded()) * step
         return min(max(snapped, Int((minKmh * 100).rounded())), Int((maxKmh * 100).rounded()))

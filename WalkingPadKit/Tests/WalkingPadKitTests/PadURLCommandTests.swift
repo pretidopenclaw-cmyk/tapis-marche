@@ -30,3 +30,9 @@ private func parse(_ link: String) throws(PadURLError) -> PadURLCommand {
     #expect(PadURLCommand.speed(9).padCommand(currentSpeedKmh: 2.0, range: .z1) == .setSpeed(6.0))
     #expect(PadURLCommand.start.padCommand(currentSpeedKmh: 0, range: .z1) == .start)
 }
+
+@Test func rejectsNonFiniteSpeeds() {
+    for raw in ["nan", "inf", "-inf", "infinity"] {
+        #expect(throws: PadURLError.unreadableSpeed(raw)) { try parse("tapismarche://vitesse/\(raw)") }
+    }
+}

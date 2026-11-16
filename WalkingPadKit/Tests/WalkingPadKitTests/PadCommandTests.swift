@@ -36,3 +36,10 @@ import Testing
     #expect(ControlResponse(data: Data(hex: "800709"))?.result == .unknown(9))
     #expect(ControlResponse(data: Data(hex: "7180")) == nil)
 }
+
+@Test func absurdSpeedsClampInsteadOfCrashing() {
+    #expect(SpeedRange.z1.clamp(1e300) == 6.0)
+    #expect(SpeedRange.z1.clamp(-.infinity) == 1.0)
+    #expect(SpeedRange.z1.clamp(.nan) == 1.0)
+    #expect(PadCommand.setSpeed(.infinity).frame(in: .z1) == Data(hex: "025802"))
+}

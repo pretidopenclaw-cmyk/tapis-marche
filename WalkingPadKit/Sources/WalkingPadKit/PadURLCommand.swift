@@ -23,7 +23,7 @@ public enum PadURLCommand: Equatable, Sendable {
         case "moins-vite": self = .slower
         case "vitesse":
             let raw = url.lastPathComponent
-            guard let kmh = Double(raw.replacingOccurrences(of: ",", with: ".")) else {
+            guard let kmh = Double(raw.replacingOccurrences(of: ",", with: ".")), kmh.isFinite else {
                 throw .unreadableSpeed(raw)
             }
             self = .speed(kmh)

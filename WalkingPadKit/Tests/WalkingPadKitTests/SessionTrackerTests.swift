@@ -104,3 +104,23 @@ private func sample(at second: Int, speed: Double, distance: Int) -> TreadmillSa
     #expect(closed.count == 1)
     #expect(closed.first?.totals.steps == nil)
 }
+
+@Test func clockGoingBackwardsCreditsNothing() {
+    var tracker = SessionTracker()
+    let before = (0..<200).map { sample(at: $0, speed: 3.6, distance: $0) }
+    let afterNtpCorrection = sample(at: 150, speed: 3.6, distance: 205)   // timestamp jumped back 49 s
+    _ = feed(&tracker, before + [afterNtpCorrection])
+    #expect(tracker.openSession?.totals.activeSeconds == 199)
+    #expect(tracker.openSession?.totals.distanceM == 199)
+}
+
+@Test func wakeByFrameClosesSessionBeforeTheNewOne() {
+    var tracker = SessionTracker()
+    _ = feed(&tracker, timeline([(600, 3.6)]))
+    let wake = TreadmillSample(timestamp: t0.addingTimeInterval(599 + 7200), speedKmh: 3.6, distanceM: 5000)
+    let closed = tracker.ingest(wake)
+    #expect(closed?.end == t0.addingTimeInterval(599))
+    #expect(closed?.totals.distanceM == 599)
+    #expect(tracker.openSession?.start == wake.timestamp)
+    #expect(tracker.openSession?.totals.distanceM == 0)
+}

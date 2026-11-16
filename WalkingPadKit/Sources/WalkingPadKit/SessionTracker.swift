@@ -28,7 +28,8 @@ public struct SessionTracker: Sendable {
             closed = close()
         }
         let interval = last.map { sample.timestamp.timeIntervalSince($0.timestamp) }
-        let contiguous = interval.map { $0 <= gapThreshold } ?? false
+        // A negative interval (clock moved back) is a gap too: never credit time or distance across it.
+        let contiguous = interval.map { (0...gapThreshold).contains($0) } ?? false
         if current == nil, sample.speedKmh > 0 {
             current = Accumulator(start: sample.timestamp)
         }

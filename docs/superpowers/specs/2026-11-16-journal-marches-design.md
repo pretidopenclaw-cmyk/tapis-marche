@@ -90,7 +90,7 @@ Pont ESP32 (captation Mac éteint) écarté : matériel, prématuré.
 
 - Intégration interne Notion créée par David ; jeton saisi dans Réglages et stocké dans le **Trousseau** (jamais dans un fichier).
 - David partage une page parente avec l'intégration ; au premier lancement, l'app y crée la base « Marches » (propriétés : Date, Début, Fin, Durée, Distance km, Pas, Vitesse moy., Vitesse max, kcal, ID) et une page « Récaps hebdo » sous laquelle vont les récaps.
-- Récap : titre « Semaine 46 — 16-22 nov. », totaux (séances, durée, km, pas), meilleur jour, mini-histogramme par jour, comparaison à la semaine précédente.
+- Récap : titre « Semaine 47 — 16-22 nov. » (semaine ISO ; à cheval sur deux mois : « Semaine 49 — 30 nov.-6 déc. »), totaux (séances, durée, km, pas), meilleur jour, mini-histogramme par jour, comparaison à la semaine précédente.
 
 ### Barre de menus
 

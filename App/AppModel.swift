@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os
+import UserNotifications
 import WalkingPadKit
 
 /// Wires the pad, the walk journal and Notion; exposes what the menu shows.
@@ -12,16 +13,24 @@ final class AppModel {
     private(set) var recentSessions: [WalkSession] = []
     private(set) var syncStatus: SyncStatus?
     private(set) var notionConfigured = false
+    private(set) var autoPilotSettings: AutoPilotSettings
+    private(set) var lastAutoStop: Date?
 
     let calendar = WeeklySummary.isoCalendar
     var title: String { MenuText.title(presence, dashboard) }
     var notionLine: String { MenuText.notion(syncStatus, configured: notionConfigured) }
+    var autoStopLine: String? { MenuText.autoStop(lastAutoStop, now: .now, calendar: calendar) }
+    var canControl: Bool { if case .connected = presence { true } else { false } }
+    var beltMoving: Bool { currentSpeedKmh > 0 }
+    private var currentSpeedKmh: Double { if case .connected(let speed) = presence { speed } else { 0 } }
 
     private static let tickInterval: Duration = .seconds(30)
     private static let sampleRetention: TimeInterval = 7 * 24 * 3600
     private static let releaseDuration: TimeInterval = 15 * 60
     private static let recapInterval: TimeInterval = 3600
     private static let notionConfigKey = "notionConfig"
+    private static let autoPilotKey = "autoPilot"
+    private static let pendingLinkLifetime: Duration = .seconds(10)
 
     @ObservationIgnored private let store: SessionStore
     @ObservationIgnored private var journal: WalkJournal
@@ -31,6 +40,10 @@ final class AppModel {
     @ObservationIgnored private var failures = 0
     @ObservationIgnored private var retry: Task<Void, Never>?
     @ObservationIgnored private var lastSyncAt = Date.distantPast
+    @ObservationIgnored private var autoPilot: AutoPilot
+    @ObservationIgnored private var pendingLink: PadURLCommand?
+    @ObservationIgnored private var pendingLinkExpiry: Task<Void, Never>?
+    @ObservationIgnored private var urlHandler: URLEventHandler?
 
     init() {
         do {
@@ -40,6 +53,12 @@ final class AppModel {
             // Never fall back to an in-memory journal: losing walks silently is the one thing this app must not do.
             fatalError("Cannot open the walking journal: \(error)")
         }
+        let settings = UserDefaults.standard.data(forKey: Self.autoPilotKey)
+            .flatMap { try? JSONDecoder().decode(AutoPilotSettings.self, from: $0) } ?? AutoPilotSettings()
+        autoPilotSettings = settings
+        autoPilot = AutoPilot(settings: settings)
+        urlHandler = URLEventHandler { [weak self] url in self?.open(url) }
+        connection.onConnected = { [weak self] date in self?.padConnected(at: date) }
         connection.onPresence = { [weak self] in self?.presence = $0 }
         connection.onSample = { [weak self] in self?.ingest($0) }
         connection.start()
@@ -131,12 +150,75 @@ final class AppModel {
         }
     }
 
+    // MARK: - Belt control
+
+    func updateAutoPilot(_ settings: AutoPilotSettings) {
+        autoPilotSettings = settings
+        autoPilot.settings = settings
+        UserDefaults.standard.set(try? JSONEncoder().encode(settings), forKey: Self.autoPilotKey)
+    }
+
+    func open(_ url: URL) {
+        do {
+            perform(try PadURLCommand(url: url))
+        } catch {
+            log.error("link refused \(url.absoluteString, privacy: .public): \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Runs a menu or link command now, or keeps it (latest only) for 10 s until the pad connects.
+    func perform(_ command: PadURLCommand) {
+        guard connection.isReady else {
+            pendingLink = command
+            pendingLinkExpiry?.cancel()
+            pendingLinkExpiry = Task { [weak self] in
+                try? await Task.sleep(for: Self.pendingLinkLifetime)
+                guard !Task.isCancelled else { return }
+                self?.dropPendingLink()
+            }
+            return
+        }
+        connection.send(command.padCommand(currentSpeedKmh: currentSpeedKmh, range: connection.speedRange))
+    }
+
+    private func padConnected(at date: Date) {
+        autoPilot.connected(at: date)
+        guard let link = pendingLink else { return }
+        pendingLink = nil
+        pendingLinkExpiry?.cancel()
+        perform(link)
+    }
+
+    private func dropPendingLink() {
+        guard pendingLink != nil else { return }
+        pendingLink = nil
+        log.notice("link dropped: pad not connected within 10 s")
+        let content = UNMutableNotificationContent()
+        content.title = "Tapis introuvable"
+        content.body = "La commande a été abandonnée : le tapis ne s'est pas connecté en 10 secondes."
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        Task {
+            let center = UNUserNotificationCenter.current()
+            guard (try? await center.requestAuthorization(options: [.alert])) == true else { return }
+            try? await center.add(request)
+        }
+    }
+
+    private func pilot(_ sample: TreadmillSample) {
+        for command in autoPilot.observe(sample) {
+            log.notice("autopilot \(String(describing: command), privacy: .public)")
+            connection.send(command)
+        }
+        lastAutoStop = autoPilot.lastAutoStop
+    }
+
     func releasePad() {
         connection.release(for: Self.releaseDuration)
     }
 
     private func ingest(_ sample: TreadmillSample) {
         record { if let closed = try journal.ingest(sample) { didClose(closed) } }
+        pilot(sample)
         refresh()
     }
 

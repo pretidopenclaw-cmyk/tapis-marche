@@ -32,6 +32,14 @@ struct SettingsView: View {
                 Text(model.notionLine).foregroundStyle(.secondary)
                 if let message { Text(message) }
             }
+            Section("Tapis") {
+                Toggle("Vitesse au démarrage", isOn: autoPilot(\.preferredSpeedEnabled))
+                Stepper(value: autoPilot(\.preferredSpeedKmh), in: 1.0...6.0, step: 0.1) {
+                    Text(FrenchFormat.speed(model.autoPilotSettings.preferredSpeedKmh))
+                }
+                .disabled(!model.autoPilotSettings.preferredSpeedEnabled)
+                Toggle("Arrêter quand je descends", isOn: autoPilot(\.autoStopEnabled))
+            }
             Section("Démarrage") {
                 Toggle("Lancer à l'ouverture de session", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
@@ -39,6 +47,16 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480)
+    }
+
+    private func autoPilot<Value>(_ keyPath: WritableKeyPath<AutoPilotSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { model.autoPilotSettings[keyPath: keyPath] },
+            set: { value in
+                var settings = model.autoPilotSettings
+                settings[keyPath: keyPath] = value
+                model.updateAutoPilot(settings)
+            })
     }
 
     private func connect() {

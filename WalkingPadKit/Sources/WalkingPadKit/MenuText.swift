@@ -59,6 +59,12 @@ public enum MenuText {
         return "Notion : " + (parts.isEmpty ? "à jour" : parts.joined(separator: " · "))
     }
 
+    /// "Arrêt auto à 14:32 : personne sur le tapis", only for an auto-stop that happened today.
+    public static func autoStop(_ date: Date?, now: Date, calendar: Calendar) -> String? {
+        guard let date, calendar.isDate(date, inSameDayAs: now) else { return nil }
+        return "Arrêt auto à \(FrenchFormat.formatter("HH:mm", calendar).string(from: date)) : personne sur le tapis"
+    }
+
     public static func session(_ s: WalkSession, calendar: Calendar) -> String {
         "\(FrenchFormat.sessionStart(s.start, calendar: calendar)) — "
             + "\(FrenchFormat.duration(s.totals.activeSeconds)) · \(FrenchFormat.km(s.totals.distanceM))"

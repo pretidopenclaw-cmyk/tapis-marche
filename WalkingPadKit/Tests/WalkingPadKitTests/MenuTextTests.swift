@@ -76,3 +76,9 @@ private let now = date(18, 16)  // Wednesday, week 47
     #expect(MenuText.notion(SyncStatus(pending: 1, lastError: .other("offline")), configured: true)
             == "Notion : erreur de synchro · 1 séance en attente")
 }
+
+@Test func autoStopLineOnlyForToday() {
+    #expect(MenuText.autoStop(date(18, 14, 32), now: now, calendar: calendar) == "Arrêt auto à 14:32 : personne sur le tapis")
+    #expect(MenuText.autoStop(date(17, 14, 32), now: now, calendar: calendar) == nil)
+    #expect(MenuText.autoStop(nil, now: now, calendar: calendar) == nil)
+}

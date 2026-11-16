@@ -18,6 +18,18 @@ struct MenuBarView: View {
             }
         }
         Text(model.notionLine)
+        if let autoStop = model.autoStopLine {
+            Text(autoStop)
+        }
+        Divider()
+        if model.beltMoving {
+            Button("Arrêter le tapis") { model.perform(.stop) }
+            Button("Plus vite") { model.perform(.faster) }
+            Button("Moins vite") { model.perform(.slower) }
+        } else {
+            Button("Démarrer le tapis") { model.perform(.start) }
+                .disabled(!model.canControl)
+        }
         Divider()
         Button("Libérer le tapis pour KS Fit (15 min)") { model.releasePad() }
         Button("Réglages…") {

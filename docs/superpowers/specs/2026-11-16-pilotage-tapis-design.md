@@ -21,6 +21,8 @@ C'est la piste « prendre le contrôle du tapis », choisie parce que c'est la p
 - Après un `stop` FTMS, les compteurs (pas, distance, temps) repartent à 0 (déjà géré par le journal).
 - Le service de déverrouillage KingSmith (`24e2521c-…`) et sa trame (`71 00 05 01 2e 5a 31 45 75` pour ce tapis) sont connus mais **inutiles** sur ce firmware.
 
+- **Télécommande pendant que le Mac tient le contrôle** (`spike/walkingpad_remote_probe.py`, 20:38) : démarrage, changement de vitesse (1,5 km/h, statut `05 96 00` = nouvelle consigne) et arrêt fonctionnent normalement → l'app **garde le contrôle** pendant toute la connexion. L'arrêt télécommande est une pause (statut `02 02`), l'arrêt FTMS du Mac un arrêt (`02 01`).
+
 ## Objectifs
 
 1. **Vitesse au démarrage** : quand la bande démarre (télécommande, Mac, Raycast), l'app la passe à la vitesse préférée (2,0 km/h par défaut), une seule fois par démarrage.

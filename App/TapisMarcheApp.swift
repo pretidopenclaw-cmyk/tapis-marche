@@ -12,5 +12,9 @@ struct TapisMarcheApp: App {
             Text(model.title)
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView(model: model)
+        }
     }
 }

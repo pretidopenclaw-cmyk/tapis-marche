@@ -32,9 +32,7 @@ final class PadConnection: NSObject {
     private var releaseTask: Task<Void, Never>?
     private var connectWatchdog: Task<Void, Never>?
     private var controlPoint: CBCharacteristic?
-    private var queue: [PadCommand] = []
-    private var inFlight: PadCommand?
-    private var retriedAfterDenial = false
+    private var queue = ControlQueue()
     private var lastWriteAt = Date.distantPast
     private var responseWatchdog: Task<Void, Never>?
 
@@ -48,7 +46,7 @@ final class PadConnection: NSObject {
         releasedUntil = until
         central?.stopScan()
         if let pad { central?.cancelPeripheralConnection(pad) }
-        queue.removeAll()
+        queue.reset()
         log.notice("released until \(until, privacy: .public)")
         onPresence(.released(until: until))
         releaseTask?.cancel()   // a second tap restarts the 15 minutes instead of being cut short by the first
@@ -66,12 +64,12 @@ final class PadConnection: NSObject {
             log.notice("control ignored, pad not ready")
             return
         }
-        queue.append(command)
+        queue.enqueue(command)
         pump()
     }
 
     private func pump() {
-        guard inFlight == nil, !queue.isEmpty, let pad, let controlPoint else { return }
+        guard let pad, let controlPoint else { return }
         let wait = Self.writeSpacing - Date.now.timeIntervalSince(lastWriteAt)
         guard wait <= 0 else {
             Task {
@@ -80,10 +78,9 @@ final class PadConnection: NSObject {
             }
             return
         }
-        let command = queue.removeFirst()
+        guard let command = queue.next() else { return }
         let frame = command.frame(in: speedRange)
         guard frame.first != 0xE8 else { return }   // OTA mode: never, whatever happens upstream
-        inFlight = command
         lastWriteAt = .now
         pad.writeValue(frame, for: controlPoint, type: .withResponse)
         log.notice("control → \(frame.map { String(format: "%02x", $0) }.joined(separator: " "), privacy: .public)")
@@ -92,30 +89,26 @@ final class PadConnection: NSObject {
             try? await Task.sleep(for: Self.responseTimeout)
             guard !Task.isCancelled else { return }
             log.error("control ← no answer")
-            inFlight = nil
+            queue.timedOut()
             pump()
         }
     }
 
     private func handle(_ response: ControlResponse) {
-        guard let command = inFlight else { return }
-        responseWatchdog?.cancel()
-        inFlight = nil
-        log.notice("control ← \(String(describing: response.result), privacy: .public)")
-        if response.result == .controlNotPermitted, command != .requestControl, !retriedAfterDenial {
-            retriedAfterDenial = true
-            queue.insert(contentsOf: [.requestControl, command], at: 0)
-        } else {
-            retriedAfterDenial = false
+        guard queue.receive(response, range: speedRange) else {
+            log.notice("control ← ignored answer for opcode \(response.opcode, privacy: .public)")
+            return
         }
+        responseWatchdog?.cancel()
+        log.notice("control ← \(String(describing: response.result), privacy: .public)")
         pump()
     }
 
     private func forgetPad() {
         pad = nil
         controlPoint = nil
-        queue.removeAll()
-        inFlight = nil
+        speedRange = .z1
+        queue.reset()
         responseWatchdog?.cancel()
     }
 
@@ -216,22 +209,22 @@ extension PadConnection: @preconcurrency CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic,
                     error: Error?) {
-        guard characteristic.uuid == Self.controlPointUUID, characteristic.isNotifying else { return }
+        guard peripheral === pad, characteristic.uuid == Self.controlPointUUID, characteristic.isNotifying else { return }
         controlPoint = characteristic
         // Held control: the remote keeps working while the app holds it (spike 2026-11-16 20:38).
-        queue.insert(.requestControl, at: 0)
+        queue.takeControlFirst()
         onConnected(.now)
         pump()
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        guard let data = characteristic.value else { return }
+        guard peripheral === pad, let data = characteristic.value else { return }
         switch characteristic.uuid {
         case Self.controlPointUUID:
             if let response = ControlResponse(data: data) { handle(response) }
             return
         case Self.speedRangeUUID:
-            if let range = SpeedRange(data: data) {
+            if let range = SpeedRange(data: data)?.bounded(by: .safeEnvelope) {
                 speedRange = range
                 log.notice("speed range \(range.minKmh, privacy: .public)–\(range.maxKmh, privacy: .public) km/h")
             }

@@ -3,7 +3,8 @@ import WalkingPadKit
 
 @main
 struct TapisMarcheApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    private var model: AppModel { delegate.model }
 
     var body: some Scene {
         MenuBarExtra {

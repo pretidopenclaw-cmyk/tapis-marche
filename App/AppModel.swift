@@ -43,7 +43,6 @@ final class AppModel {
     @ObservationIgnored private var autoPilot: AutoPilot
     @ObservationIgnored private var pendingLink: PadURLCommand?
     @ObservationIgnored private var pendingLinkExpiry: Task<Void, Never>?
-    @ObservationIgnored private var urlHandler: URLEventHandler?
 
     init() {
         do {
@@ -57,7 +56,6 @@ final class AppModel {
             .flatMap { try? JSONDecoder().decode(AutoPilotSettings.self, from: $0) } ?? AutoPilotSettings()
         autoPilotSettings = settings
         autoPilot = AutoPilot(settings: settings)
-        urlHandler = URLEventHandler { [weak self] url in self?.open(url) }
         connection.onConnected = { [weak self] date in self?.padConnected(at: date) }
         connection.onPresence = { [weak self] in self?.presence = $0 }
         connection.onSample = { [weak self] in self?.ingest($0) }

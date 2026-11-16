@@ -71,9 +71,33 @@ private func remoteStart(_ pilot: inout AutoPilot, through end: Int, walkUntil: 
 
 @Test func stepOffStopsAfterTenSecondsWithoutSteps() {
     var pilot = AutoPilot(settings: .init())
-    let commands = remoteStart(&pilot, through: 120, walkUntil: 60)
+    let commands = remoteStart(&pilot, through: 72, walkUntil: 60)
     #expect(stops(commands) == [70])
-    #expect(pilot.lastAutoStop == at(70))
+    run(&pilot, 73...75, speed: { _ in 0 }, steps: { _ in 0 })   // the belt obeys
+    #expect(pilot.lastAutoStop == at(73))
+}
+
+@Test func autoStopIsRetriedWhileBeltKeepsRunning() {
+    var pilot = AutoPilot(settings: .init())
+    let commands = remoteStart(&pilot, through: 60, walkUntil: 10)   // the first stop gets lost
+    #expect(Array(stops(commands).prefix(2)) == [25, 35])
+    #expect(pilot.lastAutoStop == nil)                                // never claim a stop that did not happen
+}
+
+@Test func disconnectThenRunningBeltIsNotAStart() {
+    var pilot = AutoPilot(settings: .init())
+    run(&pilot, 0...9, speed: { _ in 0 }, steps: { _ in 0 })
+    pilot.disconnected()                                               // « Libérer », remote start meanwhile
+    var commands = run(&pilot, 20...20, speed: { _ in 3.5 }, steps: { $0 })   // frame before control is ready
+    pilot.connected(at: at(21))
+    commands += run(&pilot, 22...60, speed: { _ in 3.5 }, steps: { $0 })
+    #expect(!commands.contains { $0.1 == .setSpeed(2.0) })
+}
+
+@Test func explicitSpeedDuringSettleIsRespected() {
+    var pilot = AutoPilot(settings: .init())
+    let commands = remoteStart(&pilot, through: 40, speed: { $0 < 11 ? 1.0 : 3.0 })   // remote 3.0 one second after start
+    #expect(commands.isEmpty)
 }
 
 @Test func noStopDuringStartGrace() {
@@ -101,7 +125,7 @@ private func remoteStart(_ pilot: inout AutoPilot, through end: Int, walkUntil: 
     _ = remoteStart(&pilot, through: 44, walkUntil: 40)
     pilot.connected(at: at(45))
     let commands = run(&pilot, 46...90, speed: { _ in 2.0 }, steps: { _ in 30 })
-    #expect(stops(commands) == [60])
+    #expect(stops(commands).first == 60)
 }
 
 @Test func autoStopDisabledOrNoStepsNeverStops() {

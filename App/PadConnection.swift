@@ -11,6 +11,7 @@ final class PadConnection: NSObject {
     var onPresence: (PadPresence) -> Void = { _ in }
     var onSample: (TreadmillSample) -> Void = { _ in }
     var onConnected: (Date) -> Void = { _ in }
+    var onDisconnected: () -> Void = {}
     private(set) var speedRange = SpeedRange.z1
     var isReady: Bool { pad != nil && controlPoint != nil }
 
@@ -47,6 +48,7 @@ final class PadConnection: NSObject {
         central?.stopScan()
         if let pad { central?.cancelPeripheralConnection(pad) }
         queue.reset()
+        onDisconnected()
         log.notice("released until \(until, privacy: .public)")
         onPresence(.released(until: until))
         releaseTask?.cancel()   // a second tap restarts the 15 minutes instead of being cut short by the first
@@ -105,6 +107,7 @@ final class PadConnection: NSObject {
     }
 
     private func forgetPad() {
+        onDisconnected()
         pad = nil
         controlPoint = nil
         speedRange = .z1

@@ -32,13 +32,16 @@ public enum PadURLCommand: Equatable, Sendable {
         }
     }
 
-    public func padCommand(currentSpeedKmh: Double, range: SpeedRange) -> PadCommand {
+    /// Nil for speed changes while the belt is stopped: a Set Target Speed on a stopped pad might start it.
+    public func padCommand(currentSpeedKmh: Double, range: SpeedRange) -> PadCommand? {
+        let target: Double
         switch self {
-        case .start: .start
-        case .stop: .stop
-        case .speed(let kmh): .setSpeed(range.clamp(kmh))
-        case .faster: .setSpeed(range.clamp(currentSpeedKmh + Self.nudgeKmh))
-        case .slower: .setSpeed(range.clamp(currentSpeedKmh - Self.nudgeKmh))
+        case .start: return .start
+        case .stop: return .stop
+        case .speed(let kmh): target = kmh
+        case .faster: target = currentSpeedKmh + Self.nudgeKmh
+        case .slower: target = currentSpeedKmh - Self.nudgeKmh
         }
+        return currentSpeedKmh > 0 ? .setSpeed(range.clamp(target)) : nil
     }
 }

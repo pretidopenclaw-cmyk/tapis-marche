@@ -28,20 +28,31 @@ public struct AutoPilot: Sendable {
     /// Speed of the previous frame; nil right after a (re)connection, whose first frame is never a start.
     private var lastSpeed: Double?
     private var startedAt: Date?
+    /// Speed when the belt started: a different speed by the end of the settle delay is David's own choice.
+    private var startSpeed: Double?
     private var speedApplied = false
     private var graceFrom: Date?
     private var lastStepAt: Date?
     private var lastSteps: Int?
-    private var stopSent = false
+    /// When the last stop was requested; re-requested every `noStepTimeout` while the belt keeps running.
+    private var stopRequestedAt: Date?
 
     public init(settings: AutoPilotSettings) {
         self.settings = settings
+    }
+
+    /// The link dropped: frames missed meanwhile mean the next one is not a start, and step tracking restarts.
+    public mutating func disconnected() {
+        lastSpeed = nil
+        lastSteps = nil
+        lastStepAt = nil
     }
 
     public mutating func connected(at date: Date) {
         lastSpeed = nil
         lastSteps = nil
         graceFrom = date
+        stopRequestedAt = nil
         let startStillPending = startedAt.map { !speedApplied && date.timeIntervalSince($0) < reconnectWindow } ?? false
         if !startStillPending { startedAt = nil }
     }
@@ -52,22 +63,24 @@ public struct AutoPilot: Sendable {
             beltStopped(sample)
             return []
         }
-        if lastSpeed == 0 { beltStarted(at: sample.timestamp) }
+        if lastSpeed == 0 { beltStarted(at: sample.timestamp, speed: sample.speedKmh) }
         trackSteps(sample)
         return [preferredSpeedCommand(sample), stopCommand(sample)].compactMap { $0 }
     }
 
     private mutating func beltStopped(_ sample: TreadmillSample) {
+        if stopRequestedAt != nil { lastAutoStop = sample.timestamp }   // only once the belt really stopped
         startedAt = nil
         speedApplied = false
-        stopSent = false
+        stopRequestedAt = nil
         lastSteps = sample.steps
     }
 
-    private mutating func beltStarted(at date: Date) {
+    private mutating func beltStarted(at date: Date, speed: Double) {
         startedAt = date
+        startSpeed = speed
         speedApplied = false
-        stopSent = false
+        stopRequestedAt = nil
         graceFrom = date
         lastStepAt = date
     }
@@ -84,17 +97,18 @@ public struct AutoPilot: Sendable {
         guard settings.preferredSpeedEnabled, !speedApplied, let startedAt,
               sample.timestamp.timeIntervalSince(startedAt) >= settleDelay else { return nil }
         speedApplied = true
+        if let startSpeed, abs(sample.speedKmh - startSpeed) >= speedTolerance { return nil }   // David already chose
         let preferred = settings.preferredSpeedKmh
         return abs(sample.speedKmh - preferred) >= speedTolerance ? .setSpeed(preferred) : nil
     }
 
     private mutating func stopCommand(_ sample: TreadmillSample) -> PadCommand? {
-        guard settings.autoStopEnabled, !stopSent, sample.steps != nil,
+        let retryDue = stopRequestedAt.map { sample.timestamp.timeIntervalSince($0) >= noStepTimeout } ?? true
+        guard settings.autoStopEnabled, retryDue, sample.steps != nil,
               let graceFrom, let lastStepAt,
               sample.timestamp.timeIntervalSince(graceFrom) >= startGrace,
               sample.timestamp.timeIntervalSince(lastStepAt) >= noStepTimeout else { return nil }
-        stopSent = true
-        lastAutoStop = sample.timestamp
+        stopRequestedAt = sample.timestamp
         return .stop
     }
 }

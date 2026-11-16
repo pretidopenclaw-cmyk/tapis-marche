@@ -57,6 +57,7 @@ final class AppModel {
         autoPilotSettings = settings
         autoPilot = AutoPilot(settings: settings)
         connection.onConnected = { [weak self] date in self?.padConnected(at: date) }
+        connection.onDisconnected = { [weak self] in self?.autoPilot.disconnected() }
         connection.onPresence = { [weak self] in self?.presence = $0 }
         connection.onSample = { [weak self] in self?.ingest($0) }
         connection.start()
@@ -176,7 +177,11 @@ final class AppModel {
             }
             return
         }
-        connection.send(command.padCommand(currentSpeedKmh: currentSpeedKmh, range: connection.speedRange))
+        guard let padCommand = command.padCommand(currentSpeedKmh: currentSpeedKmh, range: connection.speedRange) else {
+            log.notice("link ignored: speed change while the belt is stopped")
+            return
+        }
+        connection.send(padCommand)
     }
 
     private func padConnected(at date: Date) {

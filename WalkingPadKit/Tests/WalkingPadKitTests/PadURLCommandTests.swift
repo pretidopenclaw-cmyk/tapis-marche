@@ -25,14 +25,21 @@ private func parse(_ link: String) throws(PadURLError) -> PadURLCommand {
 }
 
 @Test func fasterSlowerFromCurrentSpeed() {
-    #expect(PadURLCommand.faster.padCommand(currentSpeedKmh: 2.0, range: .z1) == .setSpeed(2.5))
-    #expect(PadURLCommand.slower.padCommand(currentSpeedKmh: 1.2, range: .z1) == .setSpeed(1.0))
-    #expect(PadURLCommand.speed(9).padCommand(currentSpeedKmh: 2.0, range: .z1) == .setSpeed(6.0))
-    #expect(PadURLCommand.start.padCommand(currentSpeedKmh: 0, range: .z1) == .start)
+    #expect(PadURLCommand.faster.padCommand(currentSpeedKmh: 2.0, range: .z1) == PadCommand.setSpeed(2.5))
+    #expect(PadURLCommand.slower.padCommand(currentSpeedKmh: 1.2, range: .z1) == PadCommand.setSpeed(1.0))
+    #expect(PadURLCommand.speed(9).padCommand(currentSpeedKmh: 2.0, range: .z1) == PadCommand.setSpeed(6.0))
+    #expect(PadURLCommand.start.padCommand(currentSpeedKmh: 0, range: .z1) == PadCommand.start)
 }
 
 @Test func rejectsNonFiniteSpeeds() {
     for raw in ["nan", "inf", "-inf", "infinity"] {
         #expect(throws: PadURLError.unreadableSpeed(raw)) { try parse("tapismarche://vitesse/\(raw)") }
     }
+}
+
+@Test func speedLinksIgnoredWhileBeltStopped() {
+    #expect(PadURLCommand.speed(2.5).padCommand(currentSpeedKmh: 0, range: .z1) == nil)
+    #expect(PadURLCommand.faster.padCommand(currentSpeedKmh: 0, range: .z1) == nil)
+    #expect(PadURLCommand.slower.padCommand(currentSpeedKmh: 0, range: .z1) == nil)
+    #expect(PadURLCommand.stop.padCommand(currentSpeedKmh: 0, range: .z1) == PadCommand.stop)
 }

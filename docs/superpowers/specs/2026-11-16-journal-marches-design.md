@@ -17,6 +17,14 @@ Le projet est choisi comme base des pistes suivantes (vitesse pilotée par l'age
 - Services propriétaires présents mais muets en lecture passive : `fff0`, `ffe0`, `24e2521c-…`, `02f00000-…fe00`.
 - Une seule connexion BLE à la fois : quand l'app tient le tapis, KS Fit ne peut pas s'y connecter (et inversement). Un tapis connecté n'émet plus d'annonces.
 
+## Résultats de la marche-test (2026-11-16, 15:21 → 15:33, captés par l'app elle-même)
+
+- Connexion et notifications `0x2ACD` sans poignée de main **aussi en marche** : 651 trames, écart max 1,16 s (moy. 1,006 s), aucune perte sur 11 min.
+- **Pas confirmés** : extension bit 13 = uint24 LE, ≈ 1 pas/s à 1,5 km/h (148 → 652).
+- **Distance par paliers de 10 m** (70, 80, 90…) : précision de ±10 m par séance, sans effet sur les règles.
+- Temps écoulé (`elapsedS`) et énergie (`kcal`) remontés ; le temps se fige pendant la pause.
+- **Pause de bande de 2 min** (vitesse 0 de 15:31:12 à 15:33:17) : les compteurs se figent puis reprennent **sans remise à zéro** ; aucun compteur n'a décru sur toute la marche. La remise à zéro après extinction du tapis reste non observée (la règle « incrément = valeur courante » la couvre).
+
 ## Objectifs
 
 1. Dès que le Z1 est allumé et à portée, l'app s'y connecte seule et enregistre la séance — zéro action de David.
